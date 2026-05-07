@@ -1,0 +1,42 @@
+.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# Local logs and machine outputs
+logs/
+outputs/
+artifacts/
+*.log
+*.out
+*.err
+*.receipt
+
+# Large or private model/data artifacts
+checkpoints/
+models/
+downloads/
+cache/
+tmp/
+*.pt
+*.bin
+*.safetensors
+*.ckpt
+*.npz
+
+# Notebook noise
+.ipynb_checkpoints/
+
+# OS/editor files
+*.swp
+*.swo
+*.tmp
