@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--config",
         type=pathlib.Path,
-        default=PROJECT_ROOT / "configs" / "rome_example.json",
+        default=PROJECT_ROOT / "configs" / "examples" / "rome_example.json",
         help="Path to the EasyEdit example config.",
     )
     return parser.parse_args()

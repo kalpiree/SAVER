@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--config",
         type=pathlib.Path,
-        default=PROJECT_ROOT / "configs" / "alphaedit_counterfact_qwen25_500.json",
+        default=PROJECT_ROOT / "configs" / "main" / "alphaedit_counterfact_qwen25_500.json",
         help="Path to a JSON config file.",
     )
     parser.add_argument(
@@ -203,7 +203,7 @@ def main() -> None:
     except ImportError as exc:
         raise SystemExit(
             f"{exc}\n"
-            "Run `python3 scripts/check_environment.py --config configs/rome_example.json` "
+            "Run `python3 scripts/check_environment.py --config configs/examples/rome_example.json` "
             "to see which dependency is still missing."
         ) from exc
 
