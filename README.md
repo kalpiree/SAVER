@@ -5,10 +5,8 @@ between an editing method and a continually edited language model, evaluates a
 candidate edit before it is committed, and rejects edits that would push the
 model too far past the configured distortion budget.
 
-This repository contains the code used to run SAVER with EasyEdit-backed
-editors, including AlphaEdit, MEMIT, ROME, WISE, and UltraEdit. It also
-includes the configs used for the main 500-edit runs, the AlphaEdit ablations,
-and the hard-stream robustness settings.
+This repository contains the code used to run SAVER with EasyEdit-supported
+editors, including AlphaEdit, MEMIT, ROME, WISE, and UltraEdit. 
 
 ## What Is In This Repository
 
