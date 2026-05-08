@@ -1,53 +1,138 @@
 # SAVER
 
-SAVER is a pre-commit controller for sequential knowledge editing. It monitors
-candidate edits before they are committed to a continually edited language
-model, with the goal of preserving edit utility while reducing cumulative
-distortion over long edit streams.
+SAVER is a pre-commit controller for sequential knowledge editing. It sits
+between an editing method and a continually edited language model, evaluates a
+candidate edit before it is committed, and rejects edits that would push the
+model too far past the configured distortion budget.
 
-## Repository Contents
+This repository contains the code used to run SAVER with EasyEdit-backed
+editors, including AlphaEdit, MEMIT, ROME, WISE, and UltraEdit. It also
+includes the configs used for the main 500-edit runs, the AlphaEdit ablations,
+and the hard-stream robustness settings.
 
-- `src/`: core implementation
-- `scripts/`: experiment drivers, evaluation utilities, and analysis scripts
-- `configs/`: experiment configuration files
-- `data/`: dataset metadata, stream definitions, and preprocessing helpers
-- `docs/`: supplementary usage and experiment notes
-- `results/`: tables, summaries, and derived outputs
-- `tests/`: smoke tests and regression checks
-- `external/`: third-party dependencies or wrappers included with the release
-- `assets/`: static figures or media used in documentation
+## What Is In This Repository
 
-## Scope
+- `src/saver/`: SAVER itself
+- `scripts/`: runnable entry points for experiments and analysis
+- `configs/`: main runs, ablations, robustness settings, and small example runs
+- `data/`: prepared edit streams and small helper assets
+- `external/EasyEdit/`: vendored EasyEdit code plus the hparams used here
 
-The repository is organized to support:
+Large model weights are not bundled. Reviewers or users should download only
+the models they plan to run.
 
-- long-run sequential editing experiments
-- risk-control comparisons
-- monitoring-efficiency comparisons
-- hard-stream robustness settings
-- component ablations
+## Setup
 
-## Workflow
+Create a virtual environment and install the package:
 
-The intended workflow is:
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -e .
+```
 
-1. install dependencies
-2. prepare model checkpoints and datasets
-3. select an experiment configuration from `configs/`
-4. launch runs from `scripts/`
-5. collect outputs and summaries from `results/`
+If you plan to run Llama-based configs, make sure your Hugging Face account has
+access to the model and either run `huggingface-cli login` or export
+`HF_TOKEN`.
 
-## Reproduction
+## Download a Model
 
-The release is structured so that the main reported experiments can be
-reproduced from the included scripts and configuration files. Typical usage is
-through experiment-specific drivers in `scripts/` together with the matching
-configuration files in `configs/`.
+The configs use public Hugging Face model ids. You can either let Transformers
+resolve them directly, or download a checkpoint into a local folder first.
 
-## Directory Summary
+Example:
 
-- `configs/` defines experiment settings
-- `scripts/` contains runnable entry points
-- `src/` contains reusable implementation code
-- `results/` stores processed outputs used for reporting
+```bash
+python scripts/download_hf_model.py \
+  --repo-id Qwen/Qwen2.5-7B \
+  --local-dir models/Qwen2.5-7B
+```
 
+If you want a run to use a local checkpoint path, set:
+
+```bash
+export SAVER_MODEL_NAME_OVERRIDE=/absolute/path/to/model
+```
+
+## Check the Environment
+
+Before launching a long run, verify that the selected config can see its
+dependencies, hparams, dataset path, and CUDA device:
+
+```bash
+python scripts/check_environment.py \
+  --config configs/alphaedit_counterfact_qwen25_500.json
+```
+
+## Run a Small End-to-End Example
+
+If you want to confirm that the full SAVER path is working before a 500-edit
+run, start with one of the small example configs:
+
+```bash
+python scripts/run_example.py --config configs/rome_example.json
+python scripts/run_example.py --config configs/memit_example.json
+```
+
+These run the actual SAVER pipeline and print a JSON summary to stdout.
+
+## Run the Main Experiments
+
+The main entry point is:
+
+```bash
+python scripts/run_sequential_editing.py --config <config.json> --mode saver
+python scripts/run_sequential_editing.py --config <config.json> --mode unconstrained
+```
+
+The same config file is used for both modes. `--mode saver` enables the SAVER
+controller, while `--mode unconstrained` runs the underlying editor without the
+pre-commit gate.
+
+For example:
+
+```bash
+python scripts/run_sequential_editing.py \
+  --config configs/alphaedit_counterfact_qwen25_500.json \
+  --mode saver
+```
+
+To save the summary instead of only printing it:
+
+```bash
+python scripts/run_sequential_editing.py \
+  --config configs/alphaedit_counterfact_qwen25_500.json \
+  --mode saver \
+  --output outputs/alphaedit_counterfact_saver.json
+```
+
+## Included Experiment Families
+
+Main 500-edit configs are included for:
+
+- AlphaEdit
+- MEMIT
+- ROME
+- WISE
+- UltraEdit
+
+AlphaEdit ablation configs are included for:
+
+- full-sample monitoring
+- no-proxy sampling
+- fixed-q sampling
+- fixed-beta boundary selection
+
+Robustness configs are included for:
+
+- contradictory streams
+- overlap-heavy streams
+- easy-to-hard phase shifts
+- sparse oracle evaluation
+
+## More Detailed Run Instructions
+
+The full reproduction guide, including model download commands, main config
+lists, ablations, checkpoint metrics, and representation-drift runs, is in
+[docs/reproduce.md](docs/reproduce.md).

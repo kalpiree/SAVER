@@ -1,0 +1,29 @@
+{
+  "seed": 17,
+  "dataset_path": "data/counterfact_mini.jsonl",
+  "limit": 2,
+  "embedding_dim": 32,
+  "beta_grid": [0.55, 0.65, 0.75, 0.85, 0.95],
+  "theta": 0.25,
+  "alpha": 0.1,
+  "q_min": 0.2,
+  "history_k": 3,
+  "locality_weight": 0.65,
+  "max_prompt_tokens": 256,
+  "rejection_policy": "continue",
+  "stop_on_boundary_saturation": true,
+  "proxy_weights": {
+    "w": 2.0,
+    "gamma": 0.08,
+    "b": -1.5
+  },
+  "editor": {
+    "method": "rome",
+    "hparams_path": "external/EasyEdit/hparams/ROME/gpt2-xl.yaml",
+    "model_name_override": "openai-community/gpt2-xl",
+    "device_override": 0,
+    "stats_dir_override": "external/EasyEdit/data/stats",
+    "model_parallel_override": false,
+    "mom2_n_samples_override": 2048
+  }
+}

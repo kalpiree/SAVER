@@ -1,0 +1,17 @@
+torch
+transformers
+huggingface_hub
+datasets
+numpy
+scipy
+pandas
+matplotlib
+pyyaml
+tqdm
+sentence-transformers
+scikit-learn
+timm
+peft
+einops
+accelerate
+higher

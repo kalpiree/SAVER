@@ -1,9 +1,15 @@
-# Data Notes
+# Data
 
-Do not place private or non-redistributable data here.
+This directory contains:
 
-Recommended contents:
+- prepared CounterFact and zsRE stream files used by the released configs
+- prepared hard-stream variants for the robustness experiments
+- small helper assets for environment checks and quick sanity runs
 
-- download instructions for public datasets
-- preprocessing scripts
-- tiny example inputs for smoke testing
+Large raw datasets and model checkpoints are not bundled here.
+
+To rebuild stream files from raw public datasets, use:
+
+```bash
+python scripts/prepare_edit_dataset.py --help
+```

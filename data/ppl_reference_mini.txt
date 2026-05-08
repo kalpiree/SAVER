@@ -1,0 +1,40 @@
+The history of science is full of partial explanations that were later refined by better measurements.
+Researchers often compare competing hypotheses by checking which one predicts the data more accurately.
+Many important discoveries came from careful instruments rather than from sudden flashes of intuition.
+Astronomers learned that distant galaxies are moving away by measuring how spectral lines shift in telescopes.
+The periodic table became useful because it organized many facts into a structure that supported new predictions.
+Some theories survive for decades because they remain useful approximations even after their limits are understood.
+Engineers improve systems by trading off reliability, speed, cost, and safety instead of optimizing only one goal.
+The language of probability helps people reason about uncertainty without pretending that unknowns can disappear.
+Scientific writing usually values clarity, reproducibility, and modest claims over dramatic but unsupported certainty.
+Many classic experiments are remembered not only for their results but also for the methods they introduced.
+Biology changed when microscopes allowed scientists to observe cells and describe structures that were previously hidden.
+Chemistry advanced when researchers could isolate compounds and measure reactions with greater precision.
+Physics often progresses when a mathematical model explains old results and also predicts a new phenomenon.
+The growth of computing made it easier to test large models, store data, and repeat analyses at scale.
+Reliable software is rarely the product of one clever trick and is more often the result of careful iteration.
+Good evaluations measure both direct task success and the unintended side effects of an intervention.
+When a system is updated many times in sequence, small errors can accumulate into noticeable drift.
+Monitoring is valuable because failures are easier to understand when signals are recorded before collapse occurs.
+Some benchmarks are useful for quick iteration even when they are too small to support final claims.
+Strong empirical work usually separates the metric used for control from the metric used for external validation.
+Human memory is selective, which is one reason written records are essential for cumulative scholarship.
+Maps became more accurate when explorers combined local reports with repeated observations and standardized coordinates.
+A well designed table can reveal a trend more clearly than a long paragraph of loosely organized text.
+Careful reviews often discover that an apparent gain came from a change in the denominator rather than the numerator.
+Short prompts can still create difficult reasoning problems if the underlying concepts are closely related.
+Linguists study how meaning changes across contexts because the same word can behave differently in different sentences.
+Libraries and archives preserve knowledge by making it possible to revisit earlier work instead of starting from memory.
+Public health policy depends on both scientific evidence and the practical constraints of real institutions.
+Machine learning systems should be judged by what they improve and also by what they destabilize.
+The best experimental pipelines make it easy to rerun an analysis after one assumption has changed.
+Travel writing from earlier centuries often reveals as much about the author as it does about the places described.
+Weather forecasts improve when models combine physical structure with large volumes of recent observations.
+Economic indicators are useful only when their definitions are stable enough to support comparisons across time.
+Historians often compare several sources before treating a single document as authoritative.
+Clear notation matters because confused symbols can hide a conceptual mistake for a very long time.
+Music theory gives names to patterns that listeners can already hear, which makes those patterns easier to discuss.
+A small corpus can be enough for a smoke test even when a larger corpus is needed for publication quality evidence.
+Risk control is most persuasive when the same system is also evaluated on downstream task quality.
+An algorithm that rejects some harmful actions may still be more useful overall than one that accepts everything.
+Good research notes record failed attempts because they prevent the same blind alley from being explored twice.
