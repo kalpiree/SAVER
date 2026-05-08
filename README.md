@@ -49,7 +49,7 @@ python scripts/download_hf_model.py \
   --local-dir models/Qwen2.5-7B
 ```
 
-If you want a run to use a local checkpoint path, set:
+If you want to run a local checkpoint path, set:
 
 ```bash
 export SAVER_MODEL_NAME_OVERRIDE=/absolute/path/to/model
@@ -64,18 +64,6 @@ dependencies, hparams, dataset path, and CUDA device:
 python scripts/check_environment.py \
   --config configs/alphaedit_counterfact_qwen25_500.json
 ```
-
-## Run a Small End-to-End Example
-
-If you want to confirm that the full SAVER path is working before a 500-edit
-run, start with one of the small example configs:
-
-```bash
-python scripts/run_example.py --config configs/rome_example.json
-python scripts/run_example.py --config configs/memit_example.json
-```
-
-These run the actual SAVER pipeline and print a JSON summary to stdout.
 
 ## Run the Main Experiments
 
