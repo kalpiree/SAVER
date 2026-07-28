@@ -20,6 +20,10 @@ artifacts/
 *.out
 *.err
 *.receipt
+rebuttal/runs/
+rebuttal/csv/
+rebuttal/*.csv
+rebuttal/vendor/
 
 # Large or private model/data artifacts
 checkpoints/
