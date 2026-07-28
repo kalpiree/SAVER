@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Prepare a larger CounterFact stream from the Hugging Face `azhx/counterfact` dataset."""
-
 from __future__ import annotations
 
 import argparse
@@ -14,7 +11,7 @@ PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=pathlib.Path, required=True)
     parser.add_argument("--limit", type=int, default=2000)
     parser.add_argument("--seed", type=int, default=17)

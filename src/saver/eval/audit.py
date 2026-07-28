@@ -1,5 +1,3 @@
-"""External audit helpers for final-model evaluation."""
-
 from __future__ import annotations
 
 import json

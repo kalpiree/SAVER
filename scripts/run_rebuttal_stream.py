@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Run the reviewer-rebuttal sequential editing stream with checkpoint audits."""
-
 from __future__ import annotations
 
 import argparse
@@ -69,7 +66,7 @@ class StreamState:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=pathlib.Path, required=True)
     parser.add_argument("--mode", choices=MODES, required=True)
     parser.add_argument("--output", type=pathlib.Path, required=True)
@@ -102,7 +99,7 @@ def parse_args() -> argparse.Namespace:
         "--probe-design",
         choices=PROBE_DESIGNS,
         default="standard",
-        help="Probe-quality condition. Non-standard designs split locality into online/audit banks.",
+        help="Probe design.",
     )
     parser.add_argument(
         "--locality-monitor-fraction",
@@ -219,8 +216,6 @@ def _slice_pairs(pairs: Sequence[tuple[str, str]], fraction: float) -> list[tupl
 
 
 class FractionalCounterFactProbeGenerator(CounterFactProbeGenerator):
-    """CounterFact probes with deterministic nested probe-fraction thinning."""
-
     def __init__(self, probe_fraction: float) -> None:
         if not 0.0 < probe_fraction <= 1.0:
             raise ValueError("probe_fraction must lie in (0, 1].")
@@ -302,8 +297,6 @@ def _spearman(pairs: Sequence[tuple[float, float]]) -> float | None:
 
 
 class ProbeQualityCounterFactProbeGenerator(CounterFactProbeGenerator):
-    """Build matched relevant/weak online probes plus held-out relevant audit probes."""
-
     def __init__(
         self,
         edits: Sequence[EditRequest],
@@ -1364,13 +1357,6 @@ def _result_payload(
         "editor_runtime": {
             "method": config["editor"]["method"],
             "resolved_overrides": _editor_overrides(config["editor"], mode=args.mode),
-        },
-        "notes": {
-            "metric_unit": "first_token_exact_match",
-            "all_esr_all_psr": "Rejected requests are assigned zero success.",
-            "matched_acceptance": "Probe/KL gates use an online prefix-rank controller when --target-acceptance is supplied.",
-            "beta_plot": "not_requested_for_rebuttal_stream",
-            "probe_quality": "Non-standard probe designs split locality probes into online monitor and held-out audit banks.",
         },
     }
 
