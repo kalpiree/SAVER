@@ -11,7 +11,7 @@ import sys
 
 try:
     from importlib.util import find_spec
-except Exception:  # pragma: no cover - defensive fallback for odd Python envs
+except Exception:
     find_spec = None
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]

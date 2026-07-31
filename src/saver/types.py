@@ -25,9 +25,9 @@ class SaverConfig:
     q_min: float
     history_k: int
     proxy_params: ProxyParams
-    hard_gate_sampled_risk: bool = True
-    monotone_beta_search: bool = True
-    clip_estimated_risk_min: float = 0.0
+    hard_gate_sampled_risk: bool = False
+    monotone_beta_search: bool = False
+    clip_estimated_risk_min: Optional[float] = None
     rejection_policy: str = "continue"
     stop_on_boundary_saturation: bool = True
     sampling_policy: str = "risk_adaptive"

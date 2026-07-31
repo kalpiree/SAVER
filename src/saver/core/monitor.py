@@ -52,7 +52,9 @@ class SaverMonitor:
 
     @property
     def threshold(self) -> float:
-        return 1.0 / self.config.alpha
+        if self.config.boundary_policy == "fixed":
+            return 1.0 / self.config.alpha
+        return len(self.beta_grid) / self.config.alpha
 
     @property
     def boundary_beta(self) -> Optional[float]:

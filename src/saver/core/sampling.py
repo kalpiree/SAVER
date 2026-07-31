@@ -33,15 +33,16 @@ def importance_sampled_risk(
     r_hat: float,
     sampled: bool,
     q_t: float,
-    clip_min: float = 0.0,
+    clip_min: float | None = None,
     use_control_variate_proxy: bool = True,
 ) -> float:
     """Control-variate estimator with optional lower clipping for stability."""
 
     if use_control_variate_proxy:
         if not sampled:
-            return max(clip_min, r_hat)
-        estimated = r_hat + (observed_risk - r_hat) / q_t
+            estimated = r_hat
+        else:
+            estimated = r_hat + (observed_risk - r_hat) / q_t
     else:
         estimated = (observed_risk / q_t) if sampled else 0.0
-    return max(clip_min, estimated)
+    return max(clip_min, estimated) if clip_min is not None else estimated

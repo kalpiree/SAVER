@@ -223,18 +223,9 @@ class EasyEditAdapter(BaseEditorAdapter):
         }
 
     def _resolve_runtime_model(self, edited_model: object) -> object:
-        # WISE returns its own nn.Module wrapper around the edited HF model.
-        # Keeping that wrapper as the long-lived runtime object breaks the next
-        # edit step because EasyEdit inner-parameter paths like
-        # `model.layers[29].mlp.down_proj.weight` get resolved against the
-        # wrapper instead of the underlying causal LM.
         if self._method_token() == "wise" and hasattr(edited_model, "model"):
             return getattr(edited_model, "model")
 
-        # Hugging Face causal LMs (and PEFT wrappers) are already the runtime
-        # model we want to keep across sequential edits. Unwrapping their
-        # `.model` attribute strips the top-level module prefix and breaks later
-        # parameter lookups such as `model.layers.*` on the next edit step.
         if isinstance(edited_model, self.torch.nn.Module):
             return edited_model
         if hasattr(edited_model, "model"):

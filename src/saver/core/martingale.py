@@ -9,9 +9,7 @@ from typing import Iterable, Sequence
 def lambda_max(theta: float, q_min: float) -> float:
     """Upper bound required for a non-negative betting factor."""
 
-    upper = 1.0 / ((1.0 / q_min) - 1.0 + theta)
-    # Stay strictly inside the admissible interval so the next betting factor
-    # cannot land exactly on zero due to endpoint selection.
+    upper = 1.0 / (2.0 * ((1.0 / q_min) - 1.0 + theta))
     return math.nextafter(upper, 0.0)
 
 

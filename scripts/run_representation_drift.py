@@ -142,9 +142,13 @@ def _build_saver_config(config: dict) -> SaverConfig:
             gamma=float(proxy_weights["gamma"]),
             b=float(proxy_weights["b"]),
         ),
-        hard_gate_sampled_risk=bool(config.get("hard_gate_sampled_risk", True)),
-        monotone_beta_search=bool(config.get("monotone_beta_search", True)),
-        clip_estimated_risk_min=float(config.get("clip_estimated_risk_min", 0.0)),
+        hard_gate_sampled_risk=bool(config.get("hard_gate_sampled_risk", False)),
+        monotone_beta_search=bool(config.get("monotone_beta_search", False)),
+        clip_estimated_risk_min=(
+            float(config["clip_estimated_risk_min"])
+            if config.get("clip_estimated_risk_min") is not None
+            else None
+        ),
         rejection_policy=str(config.get("rejection_policy", "continue")),
         stop_on_boundary_saturation=bool(config.get("stop_on_boundary_saturation", True)),
         sampling_policy=str(config.get("sampling_policy", "risk_adaptive")),
@@ -235,7 +239,7 @@ def _encode_prompts(
                 last_indices = mask.sum(dim=1) - 1
                 pooled = hidden[torch_module.arange(hidden.shape[0], device=device), last_indices]
 
-            batches.append(pooled.detach().cpu().to(torch_module.float32).numpy())
+            batches.append(pooled.detach().cpu().numpy())
     return np.concatenate(batches, axis=0)
 
 
@@ -330,7 +334,7 @@ def main() -> None:
         pooling=args.pooling,
         torch_module=adapter.torch,
     )
-    arrays["step_0000"] = step0_repr.astype(np.float32)
+    arrays["step_0000"] = step0_repr
     records.append(
         _checkpoint_record(
             step=0,
@@ -396,7 +400,7 @@ def main() -> None:
                     pooling=args.pooling,
                     torch_module=adapter.torch,
                 )
-                arrays[f"step_{attempted_steps:04d}"] = current_repr.astype(np.float32)
+                arrays[f"step_{attempted_steps:04d}"] = current_repr
                 records.append(
                     _checkpoint_record(
                         step=attempted_steps,
@@ -426,7 +430,7 @@ def main() -> None:
                     pooling=args.pooling,
                     torch_module=adapter.torch,
                 )
-                arrays[f"step_{attempted_steps:04d}"] = current_repr.astype(np.float32)
+                arrays[f"step_{attempted_steps:04d}"] = current_repr
                 records.append(
                     _checkpoint_record(
                         step=attempted_steps,

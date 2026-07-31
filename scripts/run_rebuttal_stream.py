@@ -159,9 +159,13 @@ def _build_saver_config(config: dict) -> SaverConfig:
             gamma=float(proxy_weights["gamma"]),
             b=float(proxy_weights["b"]),
         ),
-        hard_gate_sampled_risk=bool(config.get("hard_gate_sampled_risk", True)),
-        monotone_beta_search=bool(config.get("monotone_beta_search", True)),
-        clip_estimated_risk_min=float(config.get("clip_estimated_risk_min", 0.0)),
+        hard_gate_sampled_risk=bool(config.get("hard_gate_sampled_risk", False)),
+        monotone_beta_search=bool(config.get("monotone_beta_search", False)),
+        clip_estimated_risk_min=(
+            float(config["clip_estimated_risk_min"])
+            if config.get("clip_estimated_risk_min") is not None
+            else None
+        ),
         rejection_policy=str(config.get("rejection_policy", "continue")),
         stop_on_boundary_saturation=bool(config.get("stop_on_boundary_saturation", True)),
         sampling_policy=str(config.get("sampling_policy", "risk_adaptive")),
