@@ -87,9 +87,8 @@ def _comparison_caveat(editor_config: dict) -> str | None:
     if not mode_overrides or saver_mode == unconstrained_mode:
         return None
     return (
-        "Mode-specific editor precision is active: saver and unconstrained use "
-        "different EasyEdit override profiles. Treat cross-mode results as an "
-        "exploratory best-achievable comparison, not a like-for-like fairness claim."
+        "SAVER and unconstrained runs use different editor overrides. "
+        "Check editor_runtime.resolved_overrides when comparing results."
     )
 
 

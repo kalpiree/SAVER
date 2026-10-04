@@ -75,9 +75,8 @@ bash scripts/install_transformers_overlay.sh
 export PYTHONPATH="${PWD}/compat/qwen35:${PWD}/external/transformers_src${PYTHONPATH:+:${PYTHONPATH}}"
 ```
 
-The helper installs Transformers from its upstream Git branch and uses a
-prerelease tokenizer dependency. Record the installed versions and revision
-with the run; this is not a pinned environment.
+The helper installs unpinned upstream Transformers and a prerelease tokenizer
+dependency. Record the installed versions and revision with the run.
 
 ## 3. Check the Setup
 
@@ -258,9 +257,6 @@ python scripts/prepare_hf_counterfact_stream.py \
   --seed 17
 ```
 
-These two data filenames retain their existing names so configurations can
-reuse prepared streams. They do not refer to a separate code directory.
-
 For a local raw zsRE file:
 
 ```bash
@@ -275,7 +271,7 @@ python scripts/prepare_edit_dataset.py \
 ```
 
 The same converter accepts local CounterFact data with `--format counterfact`.
-Portability questions retain their own answers rather than being added to
+Portability questions use their own targets and remain separate from
 same-target paraphrases. Locality reference tokens are obtained from the
 initial model before editing.
 
@@ -348,8 +344,7 @@ The queue runs SAVER first and passes its final acceptance rate to the three
 baselines. Random rejection uses that rate as a Bernoulli acceptance
 probability. The probe and KL gates combine running score ranks with a
 cumulative acceptance budget. Their realized acceptance rates can differ
-from SAVER's; report `run_summary.acceptance_rate` for each run rather than
-assuming exact equality.
+from SAVER's. Report `run_summary.acceptance_rate` for each run.
 
 Override `CONFIG`, `LIMIT`, `MIN_EDITS`, and `CHECKPOINTS` together to change
 the comparison. The available runner modes are `saver`, `unconstrained`,
@@ -369,11 +364,9 @@ at 100, 250, and 500. The locality bank is split into online and held-out
 halves before editing. Only the online locality subset varies; generality
 probes and the held-out bank remain fixed.
 
-The queue requires at least eight locality prompts per retained edit so
-the four fractions select different probe counts. This filter is applied
-before the stream limit. Prepare enough eligible records rather than
-reducing the filter to force a run. The runner rejects online/audit prompt
-overlap and indistinguishable coverage levels.
+The queue filters for at least eight locality prompts per edit before
+applying the stream limit. It requires 500 eligible records by default and
+rejects online/audit prompt overlap and indistinguishable coverage levels.
 
 ## 15. Probe Quality
 
@@ -393,8 +386,7 @@ Donor selection prefers low-similarity, length-matched probes and checks
 base-model correctness. When those filters leave too few donors, the
 implementation relaxes them and records `weak_fallback_count` in
 `probe_quality_info`; inspect that count when reporting the experiment.
-Audit prompts remain excluded, and insufficient disjoint donors cause an
-error rather than a smaller monitoring bank.
+Audit prompts remain excluded. Insufficient disjoint donors cause an error.
 
 ## 16. Controlled-Risk Detection Delay
 
@@ -430,8 +422,8 @@ change. Use the output of `run_sequential_editing.py`, not the stream
 runner's `records` output. The default grid is 0.55 to 0.99 in steps of 0.02;
 set `--beta-grid` and `--grid-size` together when using another grid.
 
-This is a full-evaluation risk-replay diagnostic, not a new model-editing
-run. The JSON and CSV outputs report detection rates, delay summaries,
+The diagnostic replays fully evaluated risk vectors without editing model
+weights. The JSON and CSV outputs report detection rates, delay summaries,
 censoring, and simulated pre-alarm excess-risk exposure. Delay summaries
 are conditional on detection; report the detection rate and censored count
 alongside them.

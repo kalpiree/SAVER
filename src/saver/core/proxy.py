@@ -28,12 +28,6 @@ def cosine_similarity(lhs: Sequence[float], rhs: Sequence[float]) -> float:
 
 @dataclass(frozen=True)
 class DiagonalWhiteningStats:
-    """A lightweight diagonal approximation of covariance correction.
-
-    This keeps the initial implementation dependency-free. When we integrate
-    real sentence embeddings, we can replace this with a full whitening matrix.
-    """
-
     mean: Sequence[float]
     scale: Sequence[float]
 

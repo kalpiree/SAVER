@@ -9,13 +9,6 @@ from saver.types import EditorProposal, EvaluationResult, ProbeBundle
 
 
 class FirstTokenCausalLMEvaluator(BaseRiskEvaluator):
-    """Score miscoverage using the first generated token only.
-
-    This is the safest first implementation for SAVER because it avoids the
-    complexity of multi-token decoding while still matching standard editing
-    practice for factual cloze prompts.
-    """
-
     def __init__(self, max_prompt_tokens: int = 256, locality_references: Mapping[str, int] | None = None) -> None:
         self.max_prompt_tokens = max_prompt_tokens
         self.locality_references = locality_references
