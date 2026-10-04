@@ -24,6 +24,7 @@ rebuttal/runs/
 rebuttal/csv/
 rebuttal/*.csv
 rebuttal/vendor/
+external/transformers_src/
 
 # Large or private model/data artifacts
 checkpoints/

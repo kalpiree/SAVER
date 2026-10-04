@@ -37,6 +37,7 @@ def first_token_exact_match(
     prompt: str,
     target_text: str,
     max_prompt_tokens: int = 256,
+    target_id: int | None = None,
 ) -> bool:
     torch = _lazy_torch()
     inputs = tokenizer(
@@ -53,7 +54,22 @@ def first_token_exact_match(
         logits = outputs.logits[0, -1, :]
         predicted_id = int(torch.argmax(logits).item())
 
-    return predicted_id == first_target_id(tokenizer, target_text)
+    return predicted_id == (target_id if target_id is not None else first_target_id(tokenizer, target_text))
+
+
+def freeze_locality_references(model: object, tokenizer: object, edits: Sequence[EditRequest], max_prompt_tokens: int = 256) -> Dict[str, int]:
+    torch = _lazy_torch()
+    model.eval()
+    references = {}
+    for edit in edits:
+        for prompt in edit.metadata.get("locality_prompts", []):
+            if prompt in references:
+                continue
+            inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=max_prompt_tokens)
+            inputs = {key: value.to(_model_device(model)) for key, value in inputs.items()}
+            with torch.inference_mode():
+                references[prompt] = int(model(**inputs).logits[0, -1, :].argmax().item())
+    return references
 
 
 def score_counterfact_metrics(
@@ -61,6 +77,7 @@ def score_counterfact_metrics(
     tokenizer: object,
     edits: Sequence[EditRequest],
     max_prompt_tokens: int = 256,
+    locality_references: Mapping[str, int] | None = None,
 ) -> Dict[str, object]:
     rewrite_total = 0
     rewrite_success = 0
@@ -87,7 +104,7 @@ def score_counterfact_metrics(
         rewrite_total += 1
         rewrite_success += int(rewrite_ok)
 
-        paraphrases = list(edit.paraphrases)
+        paraphrases = list(dict.fromkeys([rewrite_prompt, *edit.paraphrases]))
         paraphrase_hits = 0
         for prompt in paraphrases:
             ok = first_token_exact_match(
@@ -126,6 +143,7 @@ def score_counterfact_metrics(
                 prompt=prompt,
                 target_text=target,
                 max_prompt_tokens=max_prompt_tokens,
+                target_id=locality_references[prompt] if locality_references is not None else None,
             )
             locality_total += 1
             locality_success += int(ok)
@@ -161,11 +179,31 @@ def score_counterfact_metrics(
         "portability_prompt_count": portability_total,
         "locality_prompt_count": locality_total,
         "esr": (rewrite_success / rewrite_total) if rewrite_total else None,
-        "psr": (paraphrase_success / paraphrase_total) if paraphrase_total else None,
+        "psr": _mean_present(item["paraphrase_success_rate"] for item in per_edit),
         "ptsr": (portability_success / portability_total) if portability_total else None,
-        "nsr": (locality_success / locality_total) if locality_total else None,
+        "nsr": _mean_present(item["locality_success_rate"] for item in per_edit),
         "per_edit": per_edit,
     }
+
+
+def _mean_present(values):
+    values = [float(value) for value in values if value is not None]
+    return sum(values) / len(values) if values else None
+
+
+def aggregate_committed_metrics(records: Sequence[Mapping[str, object]], submitted: int) -> Dict[str, object]:
+    result = {key: _mean_present(record.get(key) for record in records) for key in ("esr", "psr", "nsr", "ptsr")}
+    result.update({key: sum(int(record.get(key, 0)) for record in records) for key in (
+        "rewrite_prompt_count", "paraphrase_prompt_count", "portability_prompt_count", "locality_prompt_count",
+    )})
+    result["num_committed_edits"] = len(records)
+    result["audit_scope"] = "committed_model_at_each_edit"
+    for metric in ("esr", "psr"):
+        result["all_" + metric] = (
+            sum(float(record[metric]) for record in records) / submitted if submitted else None
+        )
+    result["per_edit"] = [item for record in records for item in record.get("per_edit", [])]
+    return result
 
 
 def load_ppl_texts(path: str | Path) -> List[str]:

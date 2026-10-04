@@ -18,10 +18,10 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from saver.core.monitor import SaverMonitor
-from saver.core.text_embedding import hashed_text_embedding
+from saver.core.text_embedding import SentenceEmbedding
 from saver.data.counterfact import load_counterfact_like_jsonl
 from saver.editors.easyedit import EasyEditAdapter
-from saver.eval.metrics import causal_lm_perplexity, load_ppl_texts, score_counterfact_metrics
+from saver.eval.metrics import aggregate_committed_metrics, causal_lm_perplexity, freeze_locality_references, load_ppl_texts, score_counterfact_metrics
 from saver.eval.counterfact import CounterFactProbeGenerator
 from saver.eval.first_token import FirstTokenCausalLMEvaluator
 from saver.runtime_config import apply_env_editor_overrides
@@ -31,6 +31,7 @@ from saver.types import EditRequest, ExperimentSummary, ProxyParams, SaverConfig
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--reference-run", type=pathlib.Path, default=None)
     parser.add_argument(
         "--config",
         type=pathlib.Path,
@@ -245,17 +246,18 @@ def _run_saver(
     config: dict,
     edits: Sequence[EditRequest],
     adapter: EasyEditAdapter,
+    evaluator: FirstTokenCausalLMEvaluator,
+    commit_callback,
 ) -> tuple[ExperimentSummary, List[EditRequest]]:
     monitor = SaverMonitor(_build_saver_config(config))
     runner = SequentialEditRunner(
         monitor=monitor,
         probe_generator=CounterFactProbeGenerator(),
-        risk_evaluator=FirstTokenCausalLMEvaluator(
-            max_prompt_tokens=int(config.get("max_prompt_tokens", 256))
-        ),
+        risk_evaluator=evaluator,
         editor=adapter,
-        embedding_fn=lambda text: hashed_text_embedding(text, int(config["embedding_dim"])),
+        embedding_fn=SentenceEmbedding([edit.metadata["rewrite_prompt"] for edit in edits], config),
         rng=random.Random(int(config["seed"])),
+        commit_callback=commit_callback,
     )
     summary = runner.run(
         edits=edits,
@@ -273,12 +275,14 @@ def _run_unconstrained(
     config: dict,
     edits: Sequence[EditRequest],
     adapter: EasyEditAdapter,
+    commit_callback,
 ) -> tuple[dict, List[EditRequest]]:
     probe_generator = CounterFactProbeGenerator()
     committed_edits: List[EditRequest] = []
     for edit in edits:
         proposal = adapter.propose(probe_generator.build(edit))
         adapter.commit(proposal)
+        commit_callback(edit, proposal)
         committed_edits.append(edit)
 
     return {
@@ -311,8 +315,18 @@ def main() -> None:
         config["beta_grid"] = [float(token) for token in tokens]
     if args.fixed_beta is not None:
         config["fixed_beta"] = float(args.fixed_beta)
+    if config.get("match_sampling_budget") and args.mode == "saver":
+        if args.reference_run is None:
+            raise SystemExit("NoProxy requires --reference-run from SAVER on the same stream.")
+        reference = json.loads(args.reference_run.read_text())
+        if reference.get("dataset_path") != config["dataset_path"] or reference.get("seed") != config["seed"]:
+            raise SystemExit("The reference run must use the same dataset and seed.")
+        probabilities = [float(row["q_t"]) for row in reference.get("snapshots", [])]
+        if not probabilities or len(probabilities) != int(config["limit"]):
+            raise SystemExit("The reference run must cover the complete requested stream.")
+        config["fixed_q"] = sum(probabilities) / len(probabilities)
 
-    edits = load_counterfact_like_jsonl(PROJECT_ROOT / config["dataset_path"])
+    edits = load_counterfact_like_jsonl(PROJECT_ROOT / config["dataset_path"], require_validated=True)
     limit = int(config.get("limit", len(edits)))
     edits = edits[:limit]
     ppl_text_path = args.ppl_text_path
@@ -332,11 +346,35 @@ def main() -> None:
             "to see which dependency is still missing."
         ) from exc
 
+    max_prompt_tokens = int(config.get("max_prompt_tokens", 256))
+    references = freeze_locality_references(adapter.model, adapter.tokenizer, edits, max_prompt_tokens)
+    evaluator = FirstTokenCausalLMEvaluator(max_prompt_tokens, references)
+    metric_records = []
+    posthoc_seconds = 0.0
+
+    def record_commit(edit, proposal, snapshot=None):
+        nonlocal posthoc_seconds
+        audit_started = time.perf_counter()
+        record = score_counterfact_metrics(
+            adapter.model, adapter.tokenizer, [edit], max_prompt_tokens, references,
+        )
+        risks = snapshot.oracle_risks if snapshot is not None else {}
+        if not risks:
+            risks = evaluator.evaluate(
+                proposal, CounterFactProbeGenerator().build(edit), config["beta_grid"], config["locality_weight"],
+            ).joint_risk
+        record["joint_risks"] = dict(risks)
+        record["chosen_beta"] = snapshot.chosen_beta if snapshot is not None else None
+        metric_records.append(record)
+        posthoc_seconds += time.perf_counter() - audit_started
+
     if args.mode == "saver":
         saver_summary, committed_edits = _run_saver(
             config=config,
             edits=edits,
             adapter=adapter,
+            evaluator=evaluator,
+            commit_callback=record_commit,
         )
         run_summary = _summary_to_dict(saver_summary)
         snapshots = [_snapshot_to_dict(snapshot) for snapshot in saver_summary.snapshots]
@@ -345,15 +383,11 @@ def main() -> None:
             config=config,
             edits=edits,
             adapter=adapter,
+            commit_callback=record_commit,
         )
         snapshots = None
 
-    audit = score_counterfact_metrics(
-        model=adapter.model,
-        tokenizer=adapter.tokenizer,
-        edits=committed_edits,
-        max_prompt_tokens=int(config.get("max_prompt_tokens", 256)),
-    )
+    audit = aggregate_committed_metrics(metric_records, len(edits))
 
     ppl_summary = {
         "ppl": None,
@@ -375,8 +409,11 @@ def main() -> None:
     wall_clock_seconds = time.perf_counter() - started_monotonic
 
     result = {
+        "protocol_version": 2,
+        "resolved_config": config,
         "mode": args.mode,
         "config_path": str(args.config),
+        "reference_run": str(args.reference_run) if args.reference_run is not None else None,
         "dataset_path": config["dataset_path"],
         "theta": float(config["theta"]),
         "alpha": float(config["alpha"]),
@@ -386,6 +423,7 @@ def main() -> None:
             "started_at": started_at.isoformat(),
             "finished_at": finished_at.isoformat(),
             "wall_clock_seconds": wall_clock_seconds,
+            "post_commit_evaluation_seconds": posthoc_seconds,
         },
         "run_summary": run_summary,
         "audit": audit,
@@ -421,6 +459,21 @@ def main() -> None:
             theta=float(config["theta"]),
             beta_grid=[float(value) for value in config["beta_grid"]],
         )
+        reporting_beta = float(run_summary["final_boundary_beta"] or max(config["beta_grid"]))
+        full_risks = [float(record["joint_risks"][reporting_beta]) for record in metric_records]
+        result["policy_metrics"].update({
+            "dhat": _average(full_risks),
+            "reporting_beta": reporting_beta,
+            "gap": max(0.0, _average(full_risks) - config["theta"]) if full_risks else None,
+            "violation_rate": _average([float(risk > config["theta"]) for risk in full_risks]),
+            "excess_risk": _average([max(0.0, risk - config["theta"]) for risk in full_risks]),
+            "per_beta_mean_risk": {
+                str(beta): _average([float(record["joint_risks"][beta]) for record in metric_records])
+                for beta in config["beta_grid"]
+            },
+        })
+    result["commit_evaluations"] = metric_records
+    result["locality_reference_tokens"] = references
 
     if args.output is not None:
         args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -428,6 +481,8 @@ def main() -> None:
 
     stdout_result = dict(result)
     stdout_result.pop("snapshots", None)
+    stdout_result.pop("commit_evaluations", None)
+    stdout_result.pop("locality_reference_tokens", None)
     print(json.dumps(stdout_result, indent=2, sort_keys=True))
 
 

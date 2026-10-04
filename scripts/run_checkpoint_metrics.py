@@ -17,10 +17,10 @@ if str(SRC_ROOT) not in sys.path:
 
 from saver.core.monitor import SaverMonitor
 from saver.core.proxy import StructuralTensionScorer
-from saver.core.text_embedding import hashed_text_embedding
+from saver.core.text_embedding import SentenceEmbedding
 from saver.data.counterfact import load_counterfact_like_jsonl
 from saver.editors.easyedit import EasyEditAdapter
-from saver.eval.metrics import causal_lm_perplexity, load_ppl_texts, score_counterfact_metrics
+from saver.eval.metrics import aggregate_committed_metrics, causal_lm_perplexity, freeze_locality_references, load_ppl_texts, score_counterfact_metrics
 from saver.eval.counterfact import CounterFactProbeGenerator
 from saver.eval.first_token import FirstTokenCausalLMEvaluator
 from saver.types import EditRequest, ProxyParams, SaverConfig
@@ -94,6 +94,8 @@ def _comparison_caveat(editor_config: dict) -> str | None:
 
 
 def _build_saver_config(config: dict) -> SaverConfig:
+    if config.get("match_sampling_budget"):
+        raise ValueError("Use run_sequential_editing.py --reference-run for the budget-matched NoProxy variant.")
     proxy_weights = config["proxy_weights"]
     return SaverConfig(
         beta_grid=[float(value) for value in config["beta_grid"]],
@@ -115,6 +117,11 @@ def _build_saver_config(config: dict) -> SaverConfig:
         ),
         rejection_policy=str(config.get("rejection_policy", "continue")),
         stop_on_boundary_saturation=bool(config.get("stop_on_boundary_saturation", True)),
+        sampling_policy=str(config.get("sampling_policy", "risk_adaptive")),
+        fixed_q=config.get("fixed_q"),
+        use_control_variate_proxy=bool(config.get("use_control_variate_proxy", True)),
+        boundary_policy=str(config.get("boundary_policy", "adaptive")),
+        fixed_beta=config.get("fixed_beta"),
     )
 
 
@@ -140,13 +147,9 @@ def _audit_record(
     adapter: EasyEditAdapter,
     max_prompt_tokens: int,
     ppl_texts: Sequence[str] | None,
+    metric_records: Sequence[dict],
 ) -> dict:
-    audit = score_counterfact_metrics(
-        model=adapter.model,
-        tokenizer=adapter.tokenizer,
-        edits=committed_edits,
-        max_prompt_tokens=max_prompt_tokens,
-    )
+    audit = aggregate_committed_metrics(metric_records, attempted_steps)
     ppl_summary = {
         "ppl": None,
         "ppl_text_count": 0,
@@ -172,6 +175,8 @@ def _audit_record(
         "final_boundary_beta": final_boundary_beta,
         "esr": audit["esr"],
         "psr": audit["psr"],
+        "all_esr": audit["all_esr"],
+        "all_psr": audit["all_psr"],
         "ptsr": audit["ptsr"],
         "nsr": audit["nsr"],
         "rewrite_prompt_count": audit["rewrite_prompt_count"],
@@ -189,7 +194,7 @@ def main() -> None:
     with args.config.open("r", encoding="utf-8") as handle:
         config = json.load(handle)
 
-    edits = load_counterfact_like_jsonl(PROJECT_ROOT / config["dataset_path"])
+    edits = load_counterfact_like_jsonl(PROJECT_ROOT / config["dataset_path"], require_validated=True)
     limit = int(config.get("limit", len(edits)))
     edits = edits[:limit]
     checkpoints = _parse_checkpoints(args.checkpoints, args.every, len(edits))
@@ -212,8 +217,9 @@ def main() -> None:
         ) from exc
 
     probe_generator = CounterFactProbeGenerator()
+    references = freeze_locality_references(adapter.model, adapter.tokenizer, edits, int(config.get("max_prompt_tokens", 256)))
     evaluator = FirstTokenCausalLMEvaluator(
-        max_prompt_tokens=int(config.get("max_prompt_tokens", 256))
+        max_prompt_tokens=int(config.get("max_prompt_tokens", 256)), locality_references=references,
     )
     max_prompt_tokens = int(config.get("max_prompt_tokens", 256))
 
@@ -222,11 +228,12 @@ def main() -> None:
     rejected_steps = 0
     records: List[dict] = []
     committed_edits: List[EditRequest] = []
+    metric_records = []
 
     if args.mode == "saver":
         monitor = SaverMonitor(_build_saver_config(config))
         tension_scorer = StructuralTensionScorer(history_k=int(config["history_k"]))
-        embedding_dim = int(config["embedding_dim"])
+        embedding_fn = SentenceEmbedding([edit.metadata["rewrite_prompt"] for edit in edits], config)
         committed_embeddings: List[List[float]] = []
         rng = random.Random(int(config["seed"]))
 
@@ -234,7 +241,7 @@ def main() -> None:
             attempted_steps += 1
             probe_bundle = probe_generator.build(edit)
             proposal = adapter.propose(probe_bundle)
-            current_embedding = list(hashed_text_embedding(probe_bundle.edit_prompt, embedding_dim))
+            current_embedding = list(embedding_fn(probe_bundle.edit_prompt))
             structural_tension = tension_scorer.score(current_embedding, committed_embeddings)
             plan = monitor.plan_step(structural_tension=structural_tension, rng=rng)
 
@@ -261,6 +268,7 @@ def main() -> None:
                 committed_steps += 1
                 committed_edits.append(edit)
                 committed_embeddings.append(current_embedding)
+                metric_records.append(score_counterfact_metrics(adapter.model, adapter.tokenizer, [edit], max_prompt_tokens, references))
 
             if attempted_steps in checkpoints:
                 records.append(
@@ -275,8 +283,18 @@ def main() -> None:
                         adapter=adapter,
                         max_prompt_tokens=max_prompt_tokens,
                         ppl_texts=ppl_texts,
+                        metric_records=metric_records,
                     )
                 )
+            if snapshot.candidate_rejected and monitor.config.rejection_policy == "stop":
+                if attempted_steps not in checkpoints:
+                    records.append(_audit_record(
+                        step=attempted_steps, mode=args.mode, committed_edits=committed_edits,
+                        attempted_steps=attempted_steps, committed_steps=committed_steps, rejected_steps=rejected_steps,
+                        final_boundary_beta=monitor.boundary_beta, adapter=adapter,
+                        max_prompt_tokens=max_prompt_tokens, ppl_texts=ppl_texts, metric_records=metric_records,
+                    ))
+                break
     else:
         for edit in edits:
             attempted_steps += 1
@@ -284,6 +302,7 @@ def main() -> None:
             adapter.commit(proposal)
             committed_steps += 1
             committed_edits.append(edit)
+            metric_records.append(score_counterfact_metrics(adapter.model, adapter.tokenizer, [edit], max_prompt_tokens, references))
 
             if attempted_steps in checkpoints:
                 records.append(
@@ -298,6 +317,7 @@ def main() -> None:
                         adapter=adapter,
                         max_prompt_tokens=max_prompt_tokens,
                         ppl_texts=ppl_texts,
+                        metric_records=metric_records,
                     )
                 )
 

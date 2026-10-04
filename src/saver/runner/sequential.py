@@ -9,7 +9,7 @@ from saver.core.monitor import SaverMonitor
 from saver.core.proxy import StructuralTensionScorer
 from saver.editors.base import BaseEditorAdapter
 from saver.eval.base import BaseProbeGenerator, BaseRiskEvaluator
-from saver.types import EditRequest, ExperimentSummary, StepSnapshot
+from saver.types import EditRequest, EditorProposal, ExperimentSummary, StepSnapshot
 
 
 EmbeddingFn = Callable[[str], Sequence[float]]
@@ -26,6 +26,7 @@ class SequentialEditRunner:
         editor: BaseEditorAdapter,
         embedding_fn: EmbeddingFn,
         rng: random.Random | None = None,
+        commit_callback: Callable[[EditRequest, EditorProposal, StepSnapshot], None] | None = None,
     ) -> None:
         self.monitor = monitor
         self.probe_generator = probe_generator
@@ -34,6 +35,7 @@ class SequentialEditRunner:
         self.embedding_fn = embedding_fn
         self.tension_scorer = StructuralTensionScorer(history_k=monitor.config.history_k)
         self.rng = rng or random.Random(0)
+        self.commit_callback = commit_callback
 
     def run(
         self,
@@ -94,6 +96,8 @@ class SequentialEditRunner:
             self.editor.commit(proposal)
             snapshot.candidate_committed = True
             self.monitor.accept(snapshot)
+            if self.commit_callback is not None:
+                self.commit_callback(edit_request, proposal, snapshot)
             if self.monitor.boundary_saturated(snapshot):
                 snapshot.stop_triggered = True
                 snapshot.stop_reason = "boundary_evidence_exhausted"

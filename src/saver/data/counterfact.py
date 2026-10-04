@@ -9,7 +9,7 @@ from typing import Any, Dict, List
 from saver.types import EditRequest
 
 
-def load_counterfact_like_jsonl(path: str | Path) -> List[EditRequest]:
+def load_counterfact_like_jsonl(path: str | Path, require_validated: bool = False) -> List[EditRequest]:
     """Load a light-weight CounterFact-style stream from JSONL.
 
     Expected fields per line:
@@ -34,6 +34,8 @@ def load_counterfact_like_jsonl(path: str | Path) -> List[EditRequest]:
             if not line:
                 continue
             payload: Dict[str, Any] = json.loads(line)
+            if require_validated and payload.get("probe_schema_version") != 2:
+                raise ValueError(f"Rebuild {source} from the raw dataset with the current converter before running.")
             try:
                 prompt = payload["prompt"]
                 requests.append(

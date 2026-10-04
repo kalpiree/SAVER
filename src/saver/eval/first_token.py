@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, Sequence
+from typing import Dict, Iterable, List, Mapping, Sequence
 
 from saver.eval.base import BaseRiskEvaluator
 from saver.types import EditorProposal, EvaluationResult, ProbeBundle
@@ -16,8 +16,9 @@ class FirstTokenCausalLMEvaluator(BaseRiskEvaluator):
     practice for factual cloze prompts.
     """
 
-    def __init__(self, max_prompt_tokens: int = 256) -> None:
+    def __init__(self, max_prompt_tokens: int = 256, locality_references: Mapping[str, int] | None = None) -> None:
         self.max_prompt_tokens = max_prompt_tokens
+        self.locality_references = locality_references
         self._torch = None
 
     def _lazy_torch(self):
@@ -48,6 +49,7 @@ class FirstTokenCausalLMEvaluator(BaseRiskEvaluator):
         prompt: str,
         target_text: str,
         beta_grid: Sequence[float],
+        target_id: int | None = None,
     ) -> Dict[float, float]:
         torch = self._lazy_torch()
         inputs = tokenizer(
@@ -66,7 +68,8 @@ class FirstTokenCausalLMEvaluator(BaseRiskEvaluator):
 
         sorted_probabilities, sorted_ids = torch.sort(probabilities, descending=True)
         cumulative = torch.cumsum(sorted_probabilities, dim=0)
-        target_id = self._first_target_id(tokenizer, target_text)
+        if target_id is None:
+            target_id = self._first_target_id(tokenizer, target_text)
         target_rank = int((sorted_ids == target_id).nonzero(as_tuple=False)[0].item())
 
         results: Dict[float, float] = {}
@@ -89,7 +92,9 @@ class FirstTokenCausalLMEvaluator(BaseRiskEvaluator):
         locality_weight: float,
     ) -> EvaluationResult:
         handle = proposal.handle
-        model = getattr(handle, "edited_model")
+        model = getattr(handle, "runtime_model", None)
+        if model is None:
+            model = getattr(handle, "edited_model")
         tokenizer = getattr(handle, "tokenizer")
         model.eval()
 
@@ -102,7 +107,8 @@ class FirstTokenCausalLMEvaluator(BaseRiskEvaluator):
                 generality_buckets[beta].append(loss)
 
         for prompt, target in zip(probe_bundle.locality.prompts, probe_bundle.locality.targets):
-            losses = self._next_token_miscoverage(model, tokenizer, prompt, target, beta_grid)
+            target_id = self.locality_references[prompt] if self.locality_references is not None else None
+            losses = self._next_token_miscoverage(model, tokenizer, prompt, target, beta_grid, target_id)
             for beta, loss in losses.items():
                 locality_buckets[beta].append(loss)
 

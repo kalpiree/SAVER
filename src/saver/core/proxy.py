@@ -78,4 +78,4 @@ class StructuralTensionScorer:
         ]
         similarities.sort(reverse=True)
         nearest = similarities[: self.history_k]
-        return sum(nearest) / len(nearest)
+        return sum(nearest) / self.history_k

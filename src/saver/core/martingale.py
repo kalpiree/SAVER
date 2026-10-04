@@ -9,7 +9,7 @@ from typing import Iterable, Sequence
 def lambda_max(theta: float, q_min: float) -> float:
     """Upper bound required for a non-negative betting factor."""
 
-    upper = 1.0 / (2.0 * ((1.0 / q_min) - 1.0 + theta))
+    upper = 1.0 / ((1.0 / q_min) - 1.0 + theta)
     return math.nextafter(upper, 0.0)
 
 
@@ -17,30 +17,32 @@ def optimize_lambda(
     history: Sequence[float],
     theta: float,
     q_min: float,
-    grid_size: int = 64,
+    adaptive_sampling: bool = True,
 ) -> float:
-    """Simple grid-search approximation of the predictable lambda update."""
-
     max_lambda = lambda_max(theta, q_min)
+    detection_cap = (
+        1.0 / (2.0 * theta * (2.0 - q_min))
+        if adaptive_sampling
+        else max_lambda / 2.0
+    )
+    max_lambda = min(max_lambda, math.nextafter(detection_cap, 0.0))
     if not history:
         return 0.0
-
-    best_lambda = 0.0
-    best_value = float("-inf")
-    for index in range(grid_size + 1):
-        candidate = max_lambda * index / grid_size
-        value = 0.0
-        valid = True
-        for risk in history:
-            factor = 1.0 + candidate * (risk - theta)
-            if factor <= 0.0:
-                valid = False
-                break
-            value += math.log(factor)
-        if valid and value > best_value:
-            best_value = value
-            best_lambda = candidate
-    return best_lambda
+    centered = [risk - theta for risk in history]
+    if sum(centered) <= 0.0:
+        return 0.0
+    def derivative(value: float) -> float:
+        return sum(delta / (1.0 + value * delta) for delta in centered)
+    if derivative(max_lambda) >= 0.0:
+        return max_lambda
+    low, high = 0.0, max_lambda
+    for _ in range(64):
+        middle = (low + high) / 2.0
+        if derivative(middle) > 0.0:
+            low = middle
+        else:
+            high = middle
+    return (low + high) / 2.0
 
 
 def update_martingale(current_value: float, lambda_t: float, risk_t: float, theta: float) -> float:

@@ -19,11 +19,12 @@ if str(SRC_ROOT) not in sys.path:
 
 from saver.core.monitor import SaverMonitor
 from saver.core.proxy import StructuralTensionScorer
-from saver.core.text_embedding import hashed_text_embedding
+from saver.core.text_embedding import SentenceEmbedding
 from saver.data.counterfact import load_counterfact_like_jsonl
 from saver.editors.easyedit import EasyEditAdapter
 from saver.eval.counterfact import CounterFactProbeGenerator
 from saver.eval.first_token import FirstTokenCausalLMEvaluator
+from saver.eval.metrics import freeze_locality_references
 from saver.types import EditRequest, ProxyParams, SaverConfig
 
 
@@ -301,7 +302,7 @@ def main() -> None:
     if args.tokenizer_path is not None:
         config["editor"]["tokenizer_name_override"] = args.tokenizer_path
 
-    all_records = load_counterfact_like_jsonl(PROJECT_ROOT / config["dataset_path"])
+    all_records = load_counterfact_like_jsonl(PROJECT_ROOT / config["dataset_path"], require_validated=True)
     limit = int(config.get("limit", len(all_records)))
     edits = all_records[:limit]
     checkpoints = _parse_checkpoints(args.checkpoints, len(edits))
@@ -319,7 +320,8 @@ def main() -> None:
         overrides=_editor_overrides(config["editor"], mode=args.mode),
     )
     probe_generator = CounterFactProbeGenerator()
-    evaluator = FirstTokenCausalLMEvaluator(max_prompt_tokens=max_prompt_tokens)
+    references = freeze_locality_references(adapter.model, adapter.tokenizer, edits, max_prompt_tokens)
+    evaluator = FirstTokenCausalLMEvaluator(max_prompt_tokens=max_prompt_tokens, locality_references=references)
 
     arrays = {}
     records = []
@@ -354,7 +356,7 @@ def main() -> None:
     if args.mode == "saver":
         monitor = SaverMonitor(_build_saver_config(config))
         tension_scorer = StructuralTensionScorer(history_k=int(config["history_k"]))
-        embedding_dim = int(config["embedding_dim"])
+        embedding_fn = SentenceEmbedding([edit.metadata["rewrite_prompt"] for edit in edits], config)
         committed_embeddings: List[List[float]] = []
         rng = random.Random(int(config["seed"]))
 
@@ -362,7 +364,7 @@ def main() -> None:
             attempted_steps += 1
             probe_bundle = probe_generator.build(edit)
             proposal = adapter.propose(probe_bundle)
-            current_embedding = list(hashed_text_embedding(probe_bundle.edit_prompt, embedding_dim))
+            current_embedding = list(embedding_fn(probe_bundle.edit_prompt))
             structural_tension = tension_scorer.score(current_embedding, committed_embeddings)
             plan = monitor.plan_step(structural_tension=structural_tension, rng=rng)
 

@@ -65,7 +65,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-locality",
         type=int,
-        default=4,
+        default=16,
         help="Maximum locality prompts to keep per record.",
     )
     parser.add_argument(
@@ -147,12 +147,21 @@ def _format_prompt(prompt: str, subject: str) -> str:
 
 
 def _pair_lists(prompts: Sequence[Any], answers: Sequence[Any], limit: int) -> tuple[List[str], List[str]]:
-    prompt_texts = _dedupe_nonempty(prompts)
-    answer_texts = [_text(value) for value in answers if _text(value)]
-    if prompt_texts and len(answer_texts) == 1 and len(prompt_texts) > 1:
-        answer_texts = answer_texts * len(prompt_texts)
-    count = min(len(prompt_texts), len(answer_texts), limit)
-    return prompt_texts[:count], answer_texts[:count]
+    answer_texts = [_text(value) for value in answers]
+    if len(answer_texts) == 1:
+        answer_texts *= len(prompts)
+    if not answer_texts:
+        answer_texts = [""] * len(prompts)
+    pairs = []
+    seen = set()
+    for prompt, answer in zip(prompts, answer_texts):
+        prompt = _text(prompt)
+        if prompt and prompt not in seen:
+            seen.add(prompt)
+            pairs.append((prompt, answer))
+        if len(pairs) >= limit:
+            break
+    return [pair[0] for pair in pairs], [pair[1] for pair in pairs]
 
 
 def _extract_locality_pairs(record: dict[str, Any], max_locality: int) -> tuple[List[str], List[str]]:
@@ -179,6 +188,12 @@ def _extract_locality_pairs(record: dict[str, Any], max_locality: int) -> tuple[
         answers: List[str] = []
         for item in _ensure_list(record.get("neighborhood_prompts")):
             if not isinstance(item, dict):
+                prompt = _text(item)
+                if prompt and prompt not in prompts:
+                    prompts.append(prompt)
+                    answers.append("")
+                if len(prompts) >= max_locality:
+                    break
                 continue
             prompt = _text(item.get("prompt") or item.get("src") or item.get("text"))
             answer = _text(
@@ -187,7 +202,7 @@ def _extract_locality_pairs(record: dict[str, Any], max_locality: int) -> tuple[
                 or item.get("answer")
                 or item.get("target_true")
             )
-            if prompt and answer:
+            if prompt and prompt not in prompts:
                 prompts.append(prompt)
                 answers.append(answer)
             if len(prompts) >= max_locality:
@@ -277,14 +292,6 @@ def _convert_counterfact_record(
         ),
         limit=max_paraphrases,
     )
-    if len(paraphrases) < max_paraphrases:
-        portability_prompts = _extract_portability_prompts(
-            record, limit=max_paraphrases - len(paraphrases)
-        )
-        paraphrases = _dedupe_nonempty(
-            [*paraphrases, *portability_prompts],
-            limit=max_paraphrases,
-        )
     locality_prompts, locality_answers = _extract_locality_pairs(record, max_locality=max_locality)
 
     if not prompt or not target:
@@ -319,14 +326,6 @@ def _convert_zsre_record(
         _ensure_list(record.get("paraphrases") or record.get("rephrase") or record.get("rephrase_prompt")),
         limit=max_paraphrases,
     )
-    if len(paraphrases) < max_paraphrases:
-        portability_prompts = _extract_portability_prompts(
-            record, limit=max_paraphrases - len(paraphrases)
-        )
-        paraphrases = _dedupe_nonempty(
-            [*paraphrases, *portability_prompts],
-            limit=max_paraphrases,
-        )
     locality_prompts, locality_answers = _extract_locality_pairs(record, max_locality=max_locality)
 
     if not prompt or not target:
@@ -475,6 +474,7 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", encoding="utf-8") as handle:
         for item in converted:
+            item["probe_schema_version"] = 2
             handle.write(json.dumps(item, ensure_ascii=True) + "\n")
 
     summary = {

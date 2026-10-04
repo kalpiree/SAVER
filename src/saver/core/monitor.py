@@ -48,6 +48,7 @@ class SaverMonitor:
         self.step_count = 0
         self.last_full_eval_step = 0
         self.last_chosen_beta: Optional[float] = None
+        self.last_observed_step = 0
         self.states = {beta: _BetaState() for beta in self.beta_grid}
 
     @property
@@ -101,8 +102,6 @@ class SaverMonitor:
         plan: StepPlan,
         oracle_risks: Optional[Mapping[float, float]] = None,
     ) -> StepSnapshot:
-        """Preview one candidate edit without mutating committed monitor state."""
-
         if plan.sampled and oracle_risks is None:
             raise ValueError("oracle_risks are required when a step is sampled.")
 
@@ -138,6 +137,7 @@ class SaverMonitor:
                 history=state.risk_history,
                 theta=self.config.theta,
                 q_min=self.config.q_min,
+                adaptive_sampling=self.config.sampling_policy == "risk_adaptive",
             )
             next_martingale = update_martingale(
                 current_value=state.martingale,
@@ -196,25 +196,26 @@ class SaverMonitor:
     def observe_attempt(self, snapshot: StepSnapshot) -> None:
         """Update attempt-level bookkeeping that is independent of acceptance."""
 
-        if snapshot.sampled:
-            self.last_full_eval_step = snapshot.step
-
-    def accept(self, snapshot: StepSnapshot) -> None:
-        """Commit the accepted edit into the irreversible global boundary state."""
-
-        if snapshot.candidate_rejected or snapshot.chosen_beta is None:
-            raise ValueError("Cannot accept a rejected snapshot.")
+        if snapshot.step != self.last_observed_step + 1:
+            raise ValueError("Each monitoring round must be observed exactly once.")
         for beta in self.beta_grid:
             state = self.states[beta]
             state.martingale = snapshot.martingales[beta]
             state.peak_martingale = snapshot.peak_martingales[beta]
             state.risk_history.append(snapshot.estimated_risks[beta])
             state.lambda_history.append(snapshot.lambdas[beta])
+        self.last_observed_step = snapshot.step
+        if snapshot.sampled:
+            self.last_full_eval_step = snapshot.step
+
+    def accept(self, snapshot: StepSnapshot) -> None:
+        if snapshot.candidate_rejected or snapshot.chosen_beta is None:
+            raise ValueError("Cannot accept a rejected snapshot.")
+        if snapshot.step != self.last_observed_step:
+            raise ValueError("Observe the candidate before committing it.")
         self.last_chosen_beta = snapshot.chosen_beta
 
     def boundary_saturated(self, snapshot: StepSnapshot) -> bool:
-        """Return whether the committed boundary plus martingale evidence imply exhaustion."""
-
         if self.config.boundary_policy == "fixed":
             assert self.config.fixed_beta is not None
             return (

@@ -23,19 +23,12 @@ class CounterFactProbeGenerator(BaseProbeGenerator):
             if pair not in generality_pairs:
                 generality_pairs.append(pair)
 
-        portability_prompts = metadata.get("portability_prompts", [])
-        portability_answers = metadata.get("portability_answers", [])
-        if len(portability_prompts) != len(portability_answers):
-            raise ValueError("portability_prompts and portability_answers must have the same length.")
-        for prompt, target in zip(portability_prompts, portability_answers):
-            pair = (prompt, target)
-            if pair not in generality_pairs:
-                generality_pairs.append(pair)
-
         locality_prompts = metadata.get("locality_prompts", [])
         locality_answers = metadata.get("locality_answers", [])
         if len(locality_prompts) != len(locality_answers):
             raise ValueError("locality_prompts and locality_answers must have the same length.")
+        if set(locality_prompts) & {prompt for prompt, _ in generality_pairs}:
+            raise ValueError("Generality and locality prompts must be disjoint.")
 
         return ProbeBundle(
             edit_request=edit_request,

@@ -6,10 +6,12 @@ SAVER is a pre-commit controller for sequential knowledge editing.
 
 - `src/saver/`: SAVER itself
 - `scripts/`: runnable entry points for experiments and analysis
-- `configs/main/`: main runs
+- `configs/main/`: main runs and long-stream Qwen experiments
 - `configs/ablations/`: ablations
 - `configs/robustness/`: robustness settings
 - `configs/examples/`: small example runs
+- `hparams/`: additional AlphaEdit and UltraEdit model settings
+- `compat/qwen35/`: Qwen3.5 compatibility support
 - `data/`: prepared edit streams and small helper assets
 - `external/EasyEdit/`: vendored EasyEdit code plus the hparams used here
 

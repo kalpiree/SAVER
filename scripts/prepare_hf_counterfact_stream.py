@@ -18,7 +18,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dataset", default="azhx/counterfact")
     parser.add_argument("--splits", default="train,test")
     parser.add_argument("--max-paraphrases", type=int, default=3)
-    parser.add_argument("--max-locality", type=int, default=4)
+    parser.add_argument("--max-locality", type=int, default=16)
     return parser.parse_args()
 
 
@@ -84,7 +84,7 @@ def _locality_pairs(record: dict[str, Any], limit: int) -> tuple[List[str], List
         else:
             prompt = _text(item)
             answer = _text(record.get("target_true") or record.get("ground_truth"))
-        if prompt and answer:
+        if prompt and prompt not in prompts:
             prompts.append(prompt)
             answers.append(answer)
         if len(prompts) >= limit:
@@ -109,9 +109,9 @@ def _convert_record(record: dict[str, Any], index: int, args: argparse.Namespace
         or record.get("ground_truth")
     )
     paraphrases = _dedupe(
-        record.get("paraphrase_prompts")
+        _ensure_list(record.get("paraphrase_prompts")
         or record.get("paraphrases")
-        or record.get("rephrase_prompt"),
+        or record.get("rephrase_prompt")),
         limit=args.max_paraphrases,
     )
     locality_prompts, locality_answers = _locality_pairs(record, args.max_locality)
@@ -119,6 +119,7 @@ def _convert_record(record: dict[str, Any], index: int, args: argparse.Namespace
     if not prompt or not target:
         return None
     return {
+        "probe_schema_version": 2,
         "id": str(record.get("case_id") or record.get("id") or f"hf-counterfact:{index}"),
         "subject": subject or prompt,
         "relation": _text(requested.get("relation") or record.get("relation")) or "counterfact",
