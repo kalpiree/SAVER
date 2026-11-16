@@ -1,0 +1,15 @@
+{
+  "base_config": "configs/main/alphaedit_counterfact_qwen35_5000.json",
+  "seeds": [17, 18, 19, 20, 21],
+  "limit": 5000,
+  "checkpoints": [500, 1000, 2500, 5000],
+  "audit_size": 128,
+  "audit_seed": 17,
+  "fixed_beta": 0.85,
+  "answer_mode": "greedy_exact",
+  "max_answer_tokens": 64,
+  "biography_max_new_tokens": 256,
+  "mquake_max_new_tokens": 64,
+  "mquake_case_mode": "independent",
+  "question_template": "Question: {question}\nAnswer:"
+}
